@@ -1,0 +1,25 @@
+router:
+  host: "0.0.0.0"
+  port: 8199
+  health_check_interval: 10
+  max_consecutive_failures: 3
+  storage_mode: local
+  local_output_dir: ./static/outputs
+  mock_mode: true
+
+auto_discover:
+  enabled: true
+  localhost_ports: [8188, 8189, 8190, 8191]
+  detect_processes: true
+  detect_docker: true
+  auto_start_process: true
+  auto_start_docker: true
+  comfy_entry: ../ComfyUI/main.py
+  comfy_workdir: ../ComfyUI
+  python_executable: python
+
+nodes:
+  - node_id: gpu-0
+    host: localhost
+    port: 8188
+    source: static
