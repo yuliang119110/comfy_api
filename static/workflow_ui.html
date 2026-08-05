@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comfy API Console</title>
+  <style>
+    :root {
+      --bg: #101317;
+      --panel: #171c22;
+      --panel-2: #202833;
+      --line: #2d3948;
+      --text: #edf3f8;
+      --muted: #96a6b8;
+      --accent: #3ea6ff;
+      --accent-2: #7ed957;
+      --warn: #ffb454;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(62,166,255,0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(126,217,87,0.14), transparent 24%),
+        linear-gradient(180deg, #0d1116 0%, #12181f 100%);
+      min-height: 100vh;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: 340px 1fr 420px;
+      min-height: 100vh;
+    }
+    .pane {
+      border-right: 1px solid var(--line);
+      background: rgba(16, 19, 23, 0.72);
+      backdrop-filter: blur(18px);
+    }
+    .pane:last-child { border-right: none; }
+    .section {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+    }
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), #1e78ff);
+      border-color: transparent;
+    }
+    button.success {
+      background: linear-gradient(135deg, var(--accent-2), #419b3f);
+      border-color: transparent;
+    }
+    .search {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0f141a;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: calc(100vh - 180px);
+      overflow: auto;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(32,40,51,0.98), rgba(23,28,34,0.98));
+      padding: 14px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+    .card.active {
+      border-color: var(--accent);
+      outline: 2px solid rgba(62, 166, 255, 0.24);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.3;
+    }
+    .meta, .hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .hero {
+      padding: 24px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(23,28,34,0.88), rgba(16,19,23,0.6));
+    }
+    .hero h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      padding: 20px;
+      overflow: auto;
+    }
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(23,28,34,0.94);
+      padding: 14px;
+    }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .field input, .field textarea {
+      width: 100%;
+      border: 1px solid #334153;
+      background: #0f141a;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .field textarea { min-height: 110px; resize: vertical; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: rgba(62,166,255,0.14);
+      color: #bfe2ff;
+      font-size: 12px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    .results {
+      padding: 20px;
+      overflow: auto;
+    }
+    .result-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(23,28,34,0.96);
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .thumb {
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid #334153;
+      display: block;
+      margin-top: 10px;
+    }
+    .status {
+      white-space: pre-wrap;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      color: #cdd9e5;
+      background: #0b1015;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 12px;
+      max-height: 260px;
+      overflow: auto;
+    }
+    @media (max-width: 1200px) {
+      .shell { grid-template-columns: 320px 1fr; }
+      .pane:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 760px) {
+      .shell { grid-template-columns: 1fr; }
+      .pane, .main { border-right: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="pane">
+      <div class="section">
+        <h1 class="title">Workflow Lab</h1>
+        <p class="subtitle">Scan saved Comfy workflows, import them into the gateway, inspect typed inputs, and run them without touching raw JSON.</p>
+        <div class="toolbar">
+          <button id="refreshCatalog" class="primary">Refresh Catalog</button>
+          <button id="refreshStored">Refresh Stored</button>
+        </div>
+      </div>
+      <div class="section">
+        <input id="searchBox" class="search" placeholder="Search discovered workflows">
+      </div>
+      <div id="catalogList" class="list"></div>
+    </aside>
+
+    <main class="main">
+      <div class="hero">
+        <h2 id="workflowTitle">Select a workflow</h2>
+        <p id="workflowSummary" class="subtitle">Choose a discovered workflow on the left. The gateway will infer likely text, image, and video inputs from the graph.</p>
+        <div class="toolbar">
+          <button id="importWorkflow" disabled>Import Into Gateway</button>
+          <button id="loadInterface" disabled>Load Interface</button>
+          <button id="runJson" class="success" disabled>Run With Current Inputs</button>
+        </div>
+      </div>
+      <div id="inputGrid" class="grid"></div>
+    </main>
+
+    <aside class="pane">
+      <div class="section">
+        <h2 style="margin:0 0 8px; font-size: 20px;">Run Output</h2>
+        <p class="subtitle">See normalized outputs here. Images show inline, videos and other files show direct URLs.</p>
+        <div id="typedHints"></div>
+      </div>
+      <div class="results" id="results"></div>
+      <div class="section">
+        <div id="statusBox" class="status">Waiting for action...</div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const state = {
+      catalog: [],
+      selectedCatalog: null,
+      importedWorkflow: null,
+      interfaceData: null,
+      fieldState: {},
+    };
+
+    const catalogList = document.getElementById('catalogList');
+    const searchBox = document.getElementById('searchBox');
+    const workflowTitle = document.getElementById('workflowTitle');
+    const workflowSummary = document.getElementById('workflowSummary');
+    const inputGrid = document.getElementById('inputGrid');
+    const results = document.getElementById('results');
+    const statusBox = document.getElementById('statusBox');
+    const typedHints = document.getElementById('typedHints');
+    const importBtn = document.getElementById('importWorkflow');
+    const interfaceBtn = document.getElementById('loadInterface');
+    const runBtn = document.getElementById('runJson');
+
+    function setStatus(message, payload) {
+      statusBox.textContent = payload ? `${message}\n\n${JSON.stringify(payload, null, 2)}` : message;
+    }
+
+    async function getJson(url, options) {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      return data;
+    }
+
+    function renderCatalog() {
+      const query = searchBox.value.trim().toLowerCase();
+      catalogList.innerHTML = '';
+      state.catalog
+        .filter(item => !query || item.name.toLowerCase().includes(query) || item.path.toLowerCase().includes(query))
+        .forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'card' + (state.selectedCatalog?.path === item.path ? ' active' : '');
+          card.innerHTML = `
+            <h3>${item.name}</h3>
+            <div class="meta">${item.format.toUpperCase()} · ${item.node_count} nodes</div>
+            <div class="hint">${item.path}</div>
+          `;
+          card.onclick = () => selectCatalog(item);
+          catalogList.appendChild(card);
+        });
+    }
+
+    async function refreshCatalog() {
+      setStatus('Refreshing discovered workflow catalog...');
+      state.catalog = await getJson('/api/workflow-catalog');
+      renderCatalog();
+      setStatus('Catalog refreshed.', state.catalog);
+    }
+
+    async function selectCatalog(item) {
+      state.selectedCatalog = item;
+      state.importedWorkflow = null;
+      state.interfaceData = null;
+      state.fieldState = {};
+      workflowTitle.textContent = item.name;
+      workflowSummary.textContent = `${item.format.toUpperCase()} workflow from ${item.path}`;
+      importBtn.disabled = false;
+      interfaceBtn.disabled = true;
+      runBtn.disabled = true;
+      inputGrid.innerHTML = '';
+      typedHints.innerHTML = '';
+      renderCatalog();
+
+      const detail = await getJson(`/api/workflow-catalog/detail?path=${encodeURIComponent(item.path)}`);
+      renderHints(detail.editable_inputs || []);
+      setStatus('Loaded discovered workflow detail.', detail);
+    }
+
+    function renderHints(inputs) {
+      typedHints.innerHTML = '';
+      const kinds = ['STRING', 'IMAGE', 'VIDEO', 'INT', 'FLOAT', 'FILE'];
+      kinds.forEach(kind => {
+        const count = inputs.filter(input => input.comfy_type === kind).length;
+        if (!count) return;
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = `${kind}: ${count}`;
+        typedHints.appendChild(tag);
+      });
+    }
+
+    async function importSelected() {
+      if (!state.selectedCatalog) return;
+      setStatus('Importing workflow into gateway store...');
+      const data = await getJson(`/api/workflow-catalog/import?path=${encodeURIComponent(state.selectedCatalog.path)}`, { method: 'POST' });
+      state.importedWorkflow = data;
+      interfaceBtn.disabled = false;
+      runBtn.disabled = true;
+      workflowSummary.textContent = `${data.name} imported with workflow_id ${data.workflow_id}`;
+      setStatus('Workflow imported.', data);
+    }
+
+    function buildInputControl(input) {
+      const key = `${input.node_id}.${input.input_name}`;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+      const label = document.createElement('label');
+      label.textContent = `${input.class_type} · ${input.input_name} · ${input.comfy_type || 'UNKNOWN'}`;
+      wrapper.appendChild(label);
+
+      let element;
+      if (input.comfy_type === 'IMAGE' || input.comfy_type === 'VIDEO' || input.comfy_type === 'FILE') {
+        element = document.createElement('input');
+        element.type = 'file';
+      } else if ((input.current_value || '').length > 80) {
+        element = document.createElement('textarea');
+        element.value = input.current_value ?? '';
+      } else {
+        element = document.createElement('input');
+        element.type = input.comfy_type === 'INT' || input.comfy_type === 'FLOAT' ? 'number' : 'text';
+        element.value = input.current_value ?? '';
+      }
+      element.dataset.key = key;
+      wrapper.appendChild(element);
+      return wrapper;
+    }
+
+    async function loadInterface() {
+      if (!state.importedWorkflow) return;
+      setStatus('Loading inferred workflow interface...');
+      const data = await getJson(`/api/workflows/${state.importedWorkflow.workflow_id}/interface`);
+      state.interfaceData = data;
+      inputGrid.innerHTML = '';
+      (data.editable_inputs || []).forEach(input => inputGrid.appendChild(buildInputControl(input)));
+      renderHints(data.editable_inputs || []);
+      runBtn.disabled = false;
+      setStatus('Workflow interface loaded.', data);
+    }
+
+    function collectFields() {
+      const controls = inputGrid.querySelectorAll('[data-key]');
+      const grouped = {};
+      let hasFile = false;
+      controls.forEach(control => {
+        const [nodeId, inputName] = control.dataset.key.split('.');
+        grouped[nodeId] = grouped[nodeId] || {};
+        if (control.type === 'file') {
+          if (control.files && control.files[0]) {
+            grouped[nodeId][inputName] = control.files[0];
+            hasFile = true;
+          }
+        } else {
+          grouped[nodeId][inputName] = control.value;
+        }
+      });
+      return { grouped, hasFile };
+    }
+
+    async function runWorkflow() {
+      if (!state.importedWorkflow || !state.interfaceData) return;
+      const { grouped, hasFile } = collectFields();
+      setStatus('Submitting workflow run...');
+
+      let data;
+      if (hasFile) {
+        const form = new FormData();
+        form.append('wait', 'true');
+        form.append('timeout', '600');
+        for (const [nodeId, inputs] of Object.entries(grouped)) {
+          for (const [inputName, value] of Object.entries(inputs)) {
+            if (value instanceof File) {
+              form.append(`${nodeId}.${inputName}`, value);
+            } else {
+              form.append(`${nodeId}.${inputName}`, value);
+            }
+          }
+        }
+        data = await getJson(`/api/workflows/${state.importedWorkflow.workflow_id}/run-with-files`, { method: 'POST', body: form });
+      } else {
+        data = await getJson(`/api/workflows/${state.importedWorkflow.workflow_id}/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wait: true, timeout: 600, input_overrides: grouped }),
+        });
+      }
+      renderResults(data.outputs || []);
+      setStatus('Workflow run completed.', data);
+    }
+
+    function renderResults(items) {
+      results.innerHTML = '';
+      if (!items.length) {
+        results.innerHTML = '<div class="result-card">No outputs returned.</div>';
+        return;
+      }
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        const title = document.createElement('div');
+        title.innerHTML = `<strong>${item.filename || 'output'}</strong><div class="meta">${item.output_kind || ''} · node ${item.source_node_id || ''}</div>`;
+        card.appendChild(title);
+        if ((item.filename || '').match(/\.(png|jpg|jpeg|webp)$/i) || item.output_kind === 'image') {
+          const img = document.createElement('img');
+          img.className = 'thumb';
+          img.src = item.url || '';
+          card.appendChild(img);
+        }
+        const link = document.createElement('a');
+        link.href = item.url || '#';
+        link.textContent = item.url || 'No URL';
+        link.target = '_blank';
+        link.style.color = '#9ad1ff';
+        card.appendChild(link);
+        results.appendChild(card);
+      });
+    }
+
+    document.getElementById('refreshCatalog').onclick = refreshCatalog;
+    document.getElementById('refreshStored').onclick = async () => {
+      const data = await getJson('/api/workflows');
+      setStatus('Stored workflows refreshed.', data);
+    };
+    importBtn.onclick = importSelected;
+    interfaceBtn.onclick = loadInterface;
+    runBtn.onclick = runWorkflow;
+    searchBox.oninput = renderCatalog;
+
+    refreshCatalog().catch(error => setStatus('Failed to load catalog.', { error: String(error) }));
+  </script>
+</body>
+</html>

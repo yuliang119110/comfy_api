@@ -1,85 +1,76 @@
 # comfy_api
 
-A clean self-contained ComfyUI gateway repository root.
+A self-contained ComfyUI gateway with three layers:
+- standard generation endpoints
+- independent workflow storage and execution
+- discovered workflow catalog + visual UI
 
-## Repository layout
+## Why `/api/workflows` was empty before
 
-This directory is intended to be used directly as the Git repository root.
-Everything needed for the gateway is kept inside this directory:
-- source modules
-- templates
-- docs
-- config
-- workflow storage
-- static outputs
+Because `/api/workflows` only lists workflows imported into the gateway's own store.
+It does not automatically read ComfyUI's saved workflow files.
 
-## Runtime layers
+That means these are different things:
+- ComfyUI saved workflows: for example `ComfyUI/user/default/workflows/*.json`
+- gateway stored workflows: persisted under `workflows/` and visible in `/api/workflows`
 
-### Standard generation flow
-- `/api/generate/txt2img`
-- `/api/generate/img2img`
-- `/api/generate/txt_img2img`
-- `/api/generate/txt2vid`
-- `/api/generate/img2vid`
-- `/api/generate/vid2vid`
-- `/api/generate/txt_img2vid`
-- `/api/generate/txt_img_vid2vid`
+Now both modes are supported:
+- `/api/workflow-catalog/*` scans discovered workflow files directly
+- `/api/workflows/*` manages imported independent workflows
 
-### Independent custom workflow flow
-- `GET /api/workflows`
-- `POST /api/workflows`
-- `GET /api/workflows/{workflow_id}`
-- `PUT /api/workflows/{workflow_id}`
-- `DELETE /api/workflows/{workflow_id}`
-- `GET /api/workflows/{workflow_id}/interface`
-- `POST /api/workflows/{workflow_id}/run`
-- `POST /api/workflows/{workflow_id}/run-with-files`
+## New visual UI
 
-### Comfy structure utilization
-- proxy endpoints: `/upload/image`, `/prompt`, `/history`, `/view`, `/system_stats`, `/interrupt`, `/queue`, `/ws`
-- introspection endpoints: `/api/comfy/capabilities`, `/api/comfy/object_info`, `/api/comfy/object_summary`, `/api/comfy/system_stats`
-- workflow interface inference uses Comfy `object_info`
-- independent workflow outputs are normalized before return
+Open:
+- `/ui`
 
-## Intelligent discovery
+The UI supports:
+- scanning discovered workflow files
+- importing selected workflows into the gateway store
+- inferring likely text/image/video inputs
+- running workflows with text values or uploaded files
+- previewing normalized outputs
 
-The gateway supports:
-- localhost 8188 detection
-- local process discovery
-- Docker container discovery
-- automatic local ComfyUI wakeup
-- automatic Docker wakeup for matching Comfy containers
+## API groups
+
+### Standard generation
+- `/api/generate/*`
+
+### Independent stored workflows
+- `/api/workflows`
+- `/api/workflows/{workflow_id}/interface`
+- `/api/workflows/{workflow_id}/run`
+- `/api/workflows/{workflow_id}/run-with-files`
+
+### Discovered workflow catalog
+- `/api/workflow-catalog`
+- `/api/workflow-catalog/detail`
+- `/api/workflow-catalog/import`
+
+### Comfy structure introspection
+- `/api/comfy/capabilities`
+- `/api/comfy/object_info`
+- `/api/comfy/object_summary`
+- `/api/comfy/system_stats`
+
+## Secret handling
+
+Do not hardcode API keys into source files.
+Use environment variables inside Docker, for example:
+
+```bash
+export JOYCAPTION_API_KEY=your_key_here
+export OPENAI_API_KEY=your_key_here
+```
+
+Then let your custom nodes or wrappers read from env.
 
 ## Start
 
-Install dependencies:
-
 ```bash
-pip install -r requirements.txt
+python -m uvicorn comfy_api.main:app --host 0.0.0.0 --port 8199
 ```
 
-Run directly from this directory:
-
-```bash
-python -m uvicorn main:app --host 0.0.0.0 --port 8199 --reload
-```
-
-Or:
-
-```bash
-python run.py
-```
-
-## Config
-
-Use `config.yaml` for normal local usage.
-
-If this repository is nested under another workspace and ComfyUI lives one level up, you can copy `config.root.yaml` to `config.yaml` or adapt paths as needed.
-
-## Workflow storage
-
-Independent stored workflow records live in:
-- `workflows/`
-
-Standard main-flow templates live in:
-- `templates/`
+Then visit:
+- `/ui`
+- `/api/comfy/capabilities`
+- `/api/workflow-catalog`

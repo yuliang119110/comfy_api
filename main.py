@@ -8,6 +8,7 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import load_config
@@ -22,6 +23,7 @@ from .router import router as api_router, init_router
 from .proxy import router as proxy_router, init_proxy
 from .management import router as mgmt_router, init_management
 from .workflow_api import router as workflow_router, init_workflow_api
+from .workflow_catalog import router as workflow_catalog_router, init_workflow_catalog
 from .comfy_api import router as comfy_router, init_comfy_api
 from .mcp_server import mcp_server, init_mcp_server
 import comfy_api.router as _router_module
@@ -35,8 +37,14 @@ logger = logging.getLogger("comfy_gateway")
 PACKAGE_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname(PACKAGE_DIR)
 TEMPLATES_DIR = os.path.join(PACKAGE_DIR, "templates")
-LOCAL_OUTPUTS_DIR = os.path.join(PACKAGE_DIR, "static", "outputs")
+STATIC_DIR = os.path.join(PACKAGE_DIR, "static")
+LOCAL_OUTPUTS_DIR = os.path.join(STATIC_DIR, "outputs")
 WORKFLOW_STORAGE_DIR = os.path.join(ROOT_DIR, "workflows")
+CATALOG_DIRS = [
+    os.path.join(ROOT_DIR, "workflow_templates"),
+    os.path.join(ROOT_DIR, "ComfyUI", "user", "default", "workflows"),
+    TEMPLATES_DIR,
+]
 os.makedirs(LOCAL_OUTPUTS_DIR, exist_ok=True)
 os.makedirs(WORKFLOW_STORAGE_DIR, exist_ok=True)
 
@@ -60,6 +68,7 @@ async def lifespan(app: FastAPI):
     init_router(node_manager, balancer, task_tracker, http_client, workflow_builder)
     init_management(node_manager, task_tracker)
     init_workflow_api(node_manager, balancer, task_tracker, http_client, workflow_store)
+    init_workflow_catalog(workflow_store, CATALOG_DIRS)
     init_comfy_api(node_manager, balancer, http_client)
     init_mcp_server(_router_module)
 
@@ -86,12 +95,14 @@ app.add_middleware(
 
 app.include_router(api_router)
 app.include_router(workflow_router)
+app.include_router(workflow_catalog_router)
 app.include_router(comfy_router)
 app.include_router(proxy_router)
 app.include_router(ws_router)
 app.include_router(mgmt_router)
 
 app.mount("/outputs", StaticFiles(directory=LOCAL_OUTPUTS_DIR), name="outputs")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
@@ -102,6 +113,8 @@ async def root():
         "capabilities": {
             "standard_generation": "/api/generate/*",
             "workflow_management": "/api/workflows/*",
+            "workflow_catalog": "/api/workflow-catalog/*",
+            "workflow_ui": "/ui",
             "comfy_introspection": "/api/comfy/*",
             "comfy_proxy": [
                 "/prompt",
@@ -113,7 +126,16 @@ async def root():
                 "/upload/image",
             ],
         },
+        "secrets": {
+            "policy": "Use environment variables, never hardcode API keys into source files.",
+            "examples": ["OPENAI_API_KEY", "CUSTOM_API_KEY", "JOYCAPTION_API_KEY"],
+        },
     }
+
+
+@app.get("/ui")
+async def workflow_ui():
+    return FileResponse(os.path.join(STATIC_DIR, "workflow_ui.html"))
 
 
 @app.post("/mcp/sse")

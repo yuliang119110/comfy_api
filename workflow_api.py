@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import copy
 import uuid
 from typing import Any, Dict
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, Response, UploadFile
 
 from .balancer import Balancer
 from .models import (
@@ -31,10 +30,10 @@ _http_client: httpx.AsyncClient = None
 _workflow_store: WorkflowStore = None
 
 FILE_INPUT_CLASS_TYPES = {"LoadImage", "LoadVideo"}
-TEXT_CLASS_TYPES = {"CLIPTextEncode"}
-SAMPLER_CLASS_TYPES = {"KSampler"}
+TEXT_CLASS_TYPES = {"CLIPTextEncode", "CLIPTextEncodeSDXL+", "TextEncodeForSamplerParams+"}
+SAMPLER_CLASS_TYPES = {"KSampler", "FluxSamplerParams+"}
 LATENT_CLASS_TYPES = {"EmptyLatentImage"}
-OUTPUT_CLASS_TYPES = {"SaveImage", "VHS_VideoCombine"}
+OUTPUT_CLASS_TYPES = {"SaveImage", "VHS_VideoCombine", "easy saveImageLazy", "easy saveTextLazy"}
 
 
 def init_workflow_api(
@@ -134,9 +133,9 @@ async def _wait_for_outputs(prompt_id: str, timeout: float) -> list[Dict[str, An
     raise HTTPException(504, "Workflow execution timed out")
 
 
-def _infer_editable_inputs(workflow: Dict[str, Any], object_info: Dict[str, Any]) -> list[WorkflowInputDescriptor]:
+def _infer_editable_inputs(workflow_nodes: Dict[str, Dict[str, Any]], object_info: Dict[str, Any]) -> list[WorkflowInputDescriptor]:
     descriptors: list[WorkflowInputDescriptor] = []
-    for node_id, node in workflow.items():
+    for node_id, node in workflow_nodes.items():
         class_type = node.get("class_type")
         inputs = node.get("inputs") or {}
         node_info = object_info.get(class_type, {}) if isinstance(object_info, dict) else {}
@@ -152,6 +151,10 @@ def _infer_editable_inputs(workflow: Dict[str, Any], object_info: Dict[str, Any]
             comfy_type = None
             if isinstance(descriptor, list) and descriptor:
                 comfy_type = str(descriptor[0])
+            if class_type in FILE_INPUT_CLASS_TYPES and not comfy_type:
+                comfy_type = "FILE"
+            if class_type in TEXT_CLASS_TYPES and not comfy_type:
+                comfy_type = "STRING"
 
             if class_type in TEXT_CLASS_TYPES or class_type in FILE_INPUT_CLASS_TYPES or class_type in SAMPLER_CLASS_TYPES or class_type in LATENT_CLASS_TYPES or class_type in OUTPUT_CLASS_TYPES or descriptor is not None:
                 descriptors.append(
@@ -167,15 +170,9 @@ def _infer_editable_inputs(workflow: Dict[str, Any], object_info: Dict[str, Any]
     return descriptors
 
 
-def _apply_overrides(workflow: Dict[str, Any], overrides: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    runtime = copy.deepcopy(workflow)
-    for node_id, node_overrides in overrides.items():
-        if node_id not in runtime:
-            continue
-        inputs = runtime[node_id].setdefault("inputs", {})
-        for input_name, input_value in node_overrides.items():
-            inputs[input_name] = input_value
-    return runtime
+def _convert_runtime_workflow(workflow_id: str, overrides: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    runtime_workflow = _workflow_store.build_runtime_workflow(workflow_id, overrides)
+    return _workflow_store.to_api_prompt(runtime_workflow)
 
 
 @router.get("", response_model=list[StoredWorkflowSummary])
@@ -216,7 +213,8 @@ async def get_workflow_interface(workflow_id: str):
         raise HTTPException(404, "Workflow not found")
     detail = _workflow_store.get(workflow_id)
     object_info = await _fetch_object_info()
-    editable_inputs = _infer_editable_inputs(detail.workflow, object_info)
+    workflow_nodes = _workflow_store.get_workflow_nodes(detail.workflow)
+    editable_inputs = _infer_editable_inputs(workflow_nodes, object_info)
     return WorkflowInterfaceResponse(
         workflow_id=detail.workflow_id,
         name=detail.name,
@@ -229,8 +227,7 @@ async def run_workflow(workflow_id: str, req: StoredWorkflowRunRequest):
     if not _workflow_store.exists(workflow_id):
         raise HTTPException(404, "Workflow not found")
 
-    detail = _workflow_store.get(workflow_id)
-    workflow = _apply_overrides(detail.workflow, req.input_overrides)
+    workflow = _convert_runtime_workflow(workflow_id, req.input_overrides)
     client_id = req.client_id or f"workflow-run-{workflow_id}-{uuid.uuid4()}"
     prompt_id, node_id = await _submit_workflow(workflow, client_id)
 
@@ -276,8 +273,7 @@ async def run_workflow_with_files(
         else:
             overrides.setdefault(node_id, {})[input_name] = value
 
-    detail = _workflow_store.get(workflow_id)
-    workflow = _apply_overrides(detail.workflow, overrides)
+    workflow = _convert_runtime_workflow(workflow_id, overrides)
     resolved_client_id = client_id or f"workflow-run-{workflow_id}-{uuid.uuid4()}"
     prompt_id, node_id = await _submit_workflow(workflow, resolved_client_id)
 
