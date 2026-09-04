@@ -90,7 +90,7 @@ class NodeManager:
     async def _discover_process_nodes(self) -> None:
         command = (
             "Get-CimInstance Win32_Process | "
-            "Where-Object { $_.Name -match 'python|python3|python\.exe' -and $_.CommandLine -match 'ComfyUI.*main.py' } | "
+            "Where-Object { $_.Name -match 'python|python3|python[.]exe' -and $_.CommandLine -match 'ComfyUI.*main.py' } | "
             "Select-Object -ExpandProperty CommandLine"
         )
         proc = await asyncio.create_subprocess_shell(
@@ -270,3 +270,4 @@ class NodeManager:
         node.consecutive_failures = 0
         logger.info("Node %s re-enabled", node_id)
         return True
+

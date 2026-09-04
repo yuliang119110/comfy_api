@@ -47,6 +47,16 @@ CATALOG_DIRS = [
 ]
 os.makedirs(LOCAL_OUTPUTS_DIR, exist_ok=True)
 os.makedirs(WORKFLOW_STORAGE_DIR, exist_ok=True)
+try:
+    probe = os.path.join(WORKFLOW_STORAGE_DIR, ".write_probe")
+    with open(probe, "w", encoding="utf-8") as _probe_f:
+        _probe_f.write("ok")
+    os.remove(probe)
+except OSError:
+    fallback = os.path.join(LOCAL_OUTPUTS_DIR, "workflows")
+    os.makedirs(fallback, exist_ok=True)
+    WORKFLOW_STORAGE_DIR = fallback
+    logger.warning("Root workflows dir not writable, falling back to %s", WORKFLOW_STORAGE_DIR)
 
 
 @asynccontextmanager
@@ -149,7 +159,7 @@ def run():
         "comfy_api.main:app",
         host=config.host,
         port=config.port,
-        reload=True,
+        reload=config.auto_discover.enabled and os.getenv("COMFY_RELOAD", "").lower() in {"1", "true", "yes", "on"},
     )
 
 

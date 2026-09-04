@@ -97,11 +97,22 @@ async def list_catalog_workflows():
     return items
 
 
+def _resolve_catalog_path(path: str) -> Path:
+    requested = Path(path).resolve()
+    for base_dir in _catalog_dirs:
+        resolved_base = base_dir.resolve()
+        try:
+            requested.relative_to(resolved_base)
+        except ValueError:
+            continue
+        if requested.exists() and requested.is_file():
+            return requested
+    raise HTTPException(404, "Workflow file not found")
+
+
 @router.get("/detail")
 async def get_catalog_detail(path: str):
-    file_path = Path(path)
-    if not file_path.exists():
-        raise HTTPException(404, "Workflow file not found")
+    file_path = _resolve_catalog_path(path)
     workflow = _load_json(file_path)
     if workflow is None:
         raise HTTPException(400, "Workflow file is not valid JSON")
@@ -115,9 +126,7 @@ async def get_catalog_detail(path: str):
 
 @router.post("/import")
 async def import_catalog_workflow(path: str, name: str | None = None, description: str | None = None):
-    file_path = Path(path)
-    if not file_path.exists():
-        raise HTTPException(404, "Workflow file not found")
+    file_path = _resolve_catalog_path(path)
     workflow = _load_json(file_path)
     if workflow is None:
         raise HTTPException(400, "Workflow file is not valid JSON")
@@ -129,3 +138,4 @@ async def import_catalog_workflow(path: str, name: str | None = None, descriptio
         )
     )
     return detail.model_dump()
+
